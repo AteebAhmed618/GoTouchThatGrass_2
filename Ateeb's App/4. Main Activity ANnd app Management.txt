@@ -1,0 +1,125 @@
+import android.content.Intent
+import android.os.Bundle
+import android.widget.Button
+import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+class MainActivity : AppCompatActivity() {
+    private lateinit var database: GoTouchGrassDatabase
+    private lateinit var streakTextView: TextView
+    private lateinit var blockedAppsRecyclerView: RecyclerView
+    private lateinit var addAppButton: Button
+    private lateinit var settingsButton: Button
+    private lateinit var logButton: Button
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        // Initialize database
+        database = GoTouchGrassDatabase.getDatabase(applicationContext)
+
+        // Initialize UI components
+        streakTextView = findViewById(R.id.streakTextView)
+        blockedAppsRecyclerView = findViewById(R.id.blockedAppsRecyclerView)
+        addAppButton = findViewById(R.id.addAppButton)
+        settingsButton = findViewById(R.id.settingsButton)
+        logButton = findViewById(R.id.logButton)
+
+        // Check and request usage stats permission
+        if (!hasUsageStatsPermission(this)) {
+            requestUsageStatsPermission(this)
+        }
+
+        // Setup RecyclerView for blocked apps
+        setupBlockedAppsRecyclerView()
+
+        // Update streak display
+        updateStreakDisplay()
+
+        // Add App Button
+        addAppButton.setOnClickListener {
+            showAppSelectionDialog()
+        }
+
+        // Settings Button
+        settingsButton.setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
+
+        // Log Button
+        logButton.setOnClickListener {
+            startActivity(Intent(this, ActivityLogActivity::class.java))
+        }
+    }
+
+    private fun setupBlockedAppsRecyclerView() {
+        CoroutineScope(Dispatchers.IO).launch {
+            val blockedApps = database.blockedAppsDao().getAllBlockedApps()
+            withContext(Dispatchers.Main) {
+                blockedAppsRecyclerView.layoutManager = LinearLayoutManager(this@MainActivity)
+                blockedAppsRecyclerView.adapter = BlockedAppsAdapter(blockedApps) { app ->
+                    // Remove blocked app when swiped
+                    CoroutineScope(Dispatchers.IO).launch {
+                        database.blockedAppsDao().removeBlockedApp(app.packageName)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateStreakDisplay() {
+        CoroutineScope(Dispatchers.IO).launch {
+            val streak = database.appStreakDao().getCurrentStreak()
+            withContext(Dispatchers.Main) {
+                streakTextView.text = "Current Streak: ${streak?.currentStreak ?: 0} days"
+            }
+        }
+    }
+
+    private fun showAppSelectionDialog() {
+        // TODO: Implement app selection dialog
+        // This would show a list of installed apps that can be blocked
+        // When an app is selected, add it to blocked apps in the database
+    }
+}
+
+// Adapter for Blocked Apps RecyclerView
+class BlockedAppsAdapter(
+    private val blockedApps: List<BlockedApp>,
+    private val onRemove: (BlockedApp) -> Unit
+) : RecyclerView.Adapter<BlockedAppsAdapter.ViewHolder>() {
+
+    class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val appNameTextView: TextView = view.findViewById(R.id.appNameTextView)
+        val removeButton: Button = view.findViewById(R.id.removeButton)
+    }
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+        val view = LayoutInflater.from(parent.context)
+            .inflate(R.layout.blocked_app_item, parent, false)
+        return ViewHolder(view)
+    }
+
+    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+        val app = blockedApps[position]
+        holder.appNameTextView.text = getAppNameFromPackage(app.packageName)
+        holder.removeButton.setOnClickListener { onRemove(app) }
+    }
+
+    override fun getItemCount() = blockedApps.size
+
+    private fun getAppNameFromPackage(packageName: String): String {
+        // Retrieve app name from package manager
+        val packageManager = context.packageManager
+        return packageManager.getApplicationLabel(
+            packageManager.getApplicationInfo(packageName, 0)
+        ).toString()
+    }
+}

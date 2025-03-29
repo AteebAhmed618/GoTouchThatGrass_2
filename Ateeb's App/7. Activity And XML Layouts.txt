@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="#F0F4F8">
+
+    <TextView
+        android:id="@+id/streakTextView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Current Streak: 0 days"
+        android:textSize="24sp"
+        android:textAlignment="center"
+        android:padding="16dp"
+        android:background="@drawable/streak_background"
+        android:textColor="#2C3E50"/>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/blockedAppsRecyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:padding="8dp"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <Button
+            android:id="@+id/addAppButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Add Blocked App"
+            android:layout_margin="8dp"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"/>
+
+        <Button
+            android:id="@+id/settingsButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Settings"
+            android:layout_margin="8dp"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"/>
+
+        <Button
+            android:id="@+id/logButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Activity Log"
+            android:layout_margin="8dp"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"/>
+    </LinearLayout>
+</LinearLayout>

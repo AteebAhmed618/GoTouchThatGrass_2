@@ -1,0 +1,115 @@
+import android.app.AppOpsManager
+import android.app.Service
+import android.app.usage.UsageStats
+import android.app.usage.UsageStatsManager
+import android.content.Context
+import android.content.Intent
+import android.os.IBinder
+import android.provider.Settings
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.core.content.ContextCompat
+import java.util.concurrent.Executors
+
+class AppBlockingService : Service() {
+    private lateinit var usageStatsManager: UsageStatsManager
+    private lateinit var appOpsManager: AppOpsManager
+    private lateinit var database: GoTouchGrassDatabase
+
+    override fun onCreate() {
+        super.onCreate()
+        usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        appOpsManager = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+        database = GoTouchGrassDatabase.getDatabase(applicationContext)
+    }
+
+    // Core app blocking logic
+    fun isAppBlocked(packageName: String): Boolean {
+        return database.blockedAppsDao().getAllBlockedApps()
+            .any { it.packageName == packageName }
+    }
+
+    // Grass Detection Analyzer (Basic Implementation)
+    inner class GrassDetectionAnalyzer : ImageAnalysis.Analyzer {
+        fun analyze(imageProxy: ImageProxy) {
+            // Basic grass detection logic would go here
+            // This is a placeholder and would require more sophisticated image processing
+            val isGrass = detectGrass(imageProxy)
+            
+            if (isGrass) {
+                // Unblock apps, update streak
+                database.appStreakDao().updateStreak(
+                    database.appStreakDao().getCurrentStreak()?.currentStreak?.plus(1) ?: 1, 
+                    true
+                )
+                
+                // Log the challenge
+                database.challengeLogsDao().insertChallengeLog(
+                    ChallengeLogs(note = "Grass Challenge Completed")
+                )
+            }
+            
+            imageProxy.close()
+        }
+
+        private fun detectGrass(imageProxy: ImageProxy): Boolean {
+            // Placeholder for grass detection
+            // Real implementation would use machine learning or image processing
+            // To detect green texture, grass-like patterns
+            return false
+        }
+    }
+
+    // Camera Setup for Verification
+    fun setupCameraForVerification() {
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+        
+        cameraProviderFuture.addListener({
+            val cameraProvider = cameraProviderFuture.get()
+            
+            val preview = Preview.Builder().build()
+            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+            
+            val imageAnalysis = ImageAnalysis.Builder()
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build()
+                .also { 
+                    it.setAnalyzer(
+                        Executors.newSingleThreadExecutor(), 
+                        GrassDetectionAnalyzer()
+                    )
+                }
+
+            // Bind use cases to camera
+            cameraProvider.bindToLifecycle(
+                this, 
+                cameraSelector, 
+                preview, 
+                imageAnalysis
+            )
+        }, ContextCompat.getMainExecutor(this))
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+}
+
+// Utility to check Usage Access Permission
+fun hasUsageStatsPermission(context: Context): Boolean {
+    val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+    val mode = appOps.checkOpNoThrow(
+        AppOpsManager.OPSTR_GET_USAGE_STATS,
+        android.os.Process.myUid(), 
+        context.packageName
+    )
+    return mode == AppOpsManager.MODE_ALLOWED
+}
+
+// Prompt for Usage Access Permission
+fun requestUsageStatsPermission(context: Context) {
+    if (!hasUsageStatsPermission(context)) {
+        val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+        context.startActivity(intent)
+    }
+}

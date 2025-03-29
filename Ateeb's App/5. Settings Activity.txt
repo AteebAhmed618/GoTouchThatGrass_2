@@ -1,0 +1,82 @@
+import android.os.Bundle
+import android.widget.Switch
+import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+
+class SettingsActivity : AppCompatActivity() {
+    private lateinit var database: GoTouchGrassDatabase
+    private lateinit var notificationSwitch: Switch
+    private lateinit var resetStreakButton: TextView
+    private lateinit var currentStreakText: TextView
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_settings)
+
+        // Initialize database
+        database = GoTouchGrassDatabase.getDatabase(applicationContext)
+
+        // Initialize UI components
+        notificationSwitch = findViewById(R.id.notificationSwitch)
+        resetStreakButton = findViewById(R.id.resetStreakButton)
+        currentStreakText = findViewById(R.id.currentStreakText)
+
+        // Load and display current streak
+        loadCurrentStreak()
+
+        // Notification toggle setup
+        setupNotificationToggle()
+
+        // Reset streak button
+        resetStreakButton.setOnClickListener {
+            resetStreak()
+        }
+    }
+
+    private fun loadCurrentStreak() {
+        CoroutineScope(Dispatchers.IO).launch {
+            val streak = database.appStreakDao().getCurrentStreak()
+            runOnUiThread {
+                currentStreakText.text = "Current Streak: ${streak?.currentStreak ?: 0} days\n" +
+                        "Longest Streak: ${streak?.longestStreak ?: 0} days"
+            }
+        }
+    }
+
+    private fun setupNotificationToggle() {
+        // Load current notification setting
+        val sharedPrefs = getSharedPreferences("GoTouchGrassPrefs", MODE_PRIVATE)
+        notificationSwitch.isChecked = sharedPrefs.getBoolean("notifications_enabled", true)
+
+        // Set listener for notification toggle
+        notificationSwitch.setOnCheckedChangeListener { _, isChecked ->
+            // Save notification preference
+            sharedPrefs.edit().putBoolean("notifications_enabled", isChecked).apply()
+
+            // Enable/disable notifications
+            if (isChecked) {
+                // Start notification service
+                startService(Intent(this, NotificationService::class.java))
+            } else {
+                // Stop notification service
+                stopService(Intent(this, NotificationService::class.java))
+            }
+        }
+    }
+
+    private fun resetStreak() {
+        CoroutineScope(Dispatchers.IO).launch {
+            // Reset streak in database
+            database.appStreakDao().updateStreak(0, false)
+
+            // Update UI
+            runOnUiThread {
+                loadCurrentStreak()
+                // Optional: Show a toast or snackbar confirming reset
+            }
+        }
+    }
+}

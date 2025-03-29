@@ -1,0 +1,98 @@
+import android.content.Context
+import androidx.room.Database
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.Query
+
+// Data classes for app entities
+@Entity(tableName = "blocked_apps")
+data class BlockedApp(
+    @PrimaryKey val packageName: String,
+    val blockedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "challenge_logs")
+data class ChallengeLogs(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val timestamp: Long = System.currentTimeMillis(),
+    val note: String? = null,
+    val imageUri: String? = null
+)
+
+@Entity(tableName = "app_streak")
+data class AppStreak(
+    @PrimaryKey val id: Int = 1,
+    val currentStreak: Int = 0,
+    val longestStreak: Int = 0,
+    val lastCompletedDate: Long = 0
+)
+
+// DAOs (Data Access Objects)
+@Dao
+interface BlockedAppsDao {
+    @Insert
+    fun insertBlockedApp(app: BlockedApp)
+
+    @Query("DELETE FROM blocked_apps WHERE packageName = :packageName")
+    fun removeBlockedApp(packageName: String)
+
+    @Query("SELECT * FROM blocked_apps")
+    fun getAllBlockedApps(): List<BlockedApp>
+}
+
+@Dao
+interface ChallengeLogsDao {
+    @Insert
+    fun insertChallengeLog(log: ChallengeLogs)
+
+    @Query("SELECT * FROM challenge_logs ORDER BY timestamp DESC")
+    fun getAllChallengeLogs(): List<ChallengeLogs>
+}
+
+@Dao
+interface AppStreakDao {
+    @Query("SELECT * FROM app_streak LIMIT 1")
+    fun getCurrentStreak(): AppStreak?
+
+    fun updateStreak(streak: Int, isNewDay: Boolean) {
+        val currentStreak = getCurrentStreak() ?: AppStreak()
+        val updatedStreak = currentStreak.copy(
+            currentStreak = streak,
+            longestStreak = maxOf(currentStreak.longestStreak, streak),
+            lastCompletedDate = System.currentTimeMillis()
+        )
+        // Update logic would be implemented here
+    }
+}
+
+// Room Database
+@Database(
+    entities = [BlockedApp::class, ChallengeLogs::class, AppStreak::class],
+    version = 1
+)
+abstract class GoTouchGrassDatabase : RoomDatabase() {
+    abstract fun blockedAppsDao(): BlockedAppsDao
+    abstract fun challengeLogsDao(): ChallengeLogsDao
+    abstract fun appStreakDao(): AppStreakDao
+
+    companion object {
+        @Volatile
+        private var INSTANCE: GoTouchGrassDatabase? = null
+
+        fun getDatabase(context: Context): GoTouchGrassDatabase {
+            return INSTANCE ?: synchronized(this) {
+                val instance = Room.databaseBuilder(
+                    context.applicationContext,
+                    GoTouchGrassDatabase::class.java,
+                    "gotouchgrass_database"
+                ).build()
+                INSTANCE = instance
+                instance
+            }
+        }
+    }
+}
